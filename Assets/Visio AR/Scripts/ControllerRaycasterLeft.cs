@@ -15,14 +15,16 @@ public class VRRaycastControllerLeft : MonoBehaviour
 
     public GameObject targetPoint; // Empty game object to be moved based on raycast
     public string hitTag = "Interactable"; // Tag to check for vibration
-
     public MonoBehaviour additionalScriptToToggle; // Script to toggle along with the raycast
+
+    public float rayVisualizerWidth = 0.01f; // Width of the ray visualizer
+    public float rayVisualizerHeight = 0.01f; // Height of the ray visualizer
+
+    private int ignoreRaycastLayerMask; // Layer mask to ignore raycasts on "Ignore Raycast" layer
 
     private GameObject rayVisual;
     private MeshRenderer rayVisualRenderer;
     private bool isEnabled = true; // Toggle to enable or disable everything
-
-    private int ignoreRaycastLayerMask; // Layer mask to ignore raycasts on "Ignore Raycast" layer
 
     void Start()
     {
@@ -112,6 +114,11 @@ public class VRRaycastControllerLeft : MonoBehaviour
         }
     }
 
+    private void OnDisable()
+    {
+        rayVisual.SetActive(false);
+    }
+
     private void VisualizeRaycast(Vector3 start, Vector3 end)
     {
         if (rayVisual != null)
@@ -120,8 +127,8 @@ public class VRRaycastControllerLeft : MonoBehaviour
             float distance = direction.magnitude;
 
             rayVisual.transform.position = start + direction / 2;
-            rayVisual.transform.rotation = Quaternion.LookRotation(direction);
-            rayVisual.transform.localScale = new Vector3(0.01f, 0.01f, distance);
+            rayVisual.transform.rotation = Quaternion.LookRotation(direction) * Quaternion.Euler(90, 0, 0);
+            rayVisual.transform.localScale = new Vector3(rayVisualizerWidth, distance / 2, rayVisualizerHeight);
 
             // Ensure the ray visualizer is active
             rayVisual.SetActive(true);

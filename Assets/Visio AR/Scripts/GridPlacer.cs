@@ -3,15 +3,15 @@ using UnityEngine;
 
 public class GridPlacer : MonoBehaviour
 {
-    public GameObject gridPrefab; // Prefab to place on the grid
-    public GameObject prefabVariantA; // Variant A prefab
-    public GameObject prefabVariantB; // Variant B prefab
-    public GameObject prefabVariantC; // Variant C prefab
+    public GameObject prefabA; // Prefab A
+    public GameObject prefabB; // Prefab B
+    public GameObject prefabC; // Prefab C
+    public GameObject previewPrefab; // Unique Preview Tile Prefab
     public GameObject cylinderPrefab; // Prefab to visualize the raycast
     public GameObject leftController; // Reference to the left controller
+    public GameObject snapToObject; // Specific GameObject for snapping the grid and rotation
     public float gridSize = 1f; // Size of each grid square
     public float maxCylinderLength = 3f; // Max length of the cylinder ray
-    public string gridTag = "Grid"; // Tag to identify valid grid placement areas
     public string prefabLayerName = "PlacedPrefab"; // Layer name for placed prefabs
     public bool previewBreathing = false; // Enable or disable preview breathing
     [Range(0f, 0.5f)] public float breathScale = 0.1f; // Max additional scale factor for breathing
@@ -29,44 +29,37 @@ public class GridPlacer : MonoBehaviour
 
         raycastCylinder = Instantiate(cylinderPrefab, Vector3.zero, Quaternion.identity);
         raycastCylinder.transform.localScale = new Vector3(0.01f, maxCylinderLength / 2, 0.01f); // Adjust the scale to match the ray length
-        previewTile = Instantiate(gridPrefab, Vector3.zero, Quaternion.identity);
+        raycastCylinder.SetActive(false); // Disable by default
+
+        // Instantiate the preview tile but keep it inactive
+        previewTile = Instantiate(previewPrefab, Vector3.zero, Quaternion.identity);
         previewTile.SetActive(false);
-        //InvokeRepeating("UpdateTileVariants", 1, 1);
     }
 
     void Update()
     {
         if (OVRInput.GetDown(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch))
         {
-            HandlePlacement();
-            //UpdateTileVariants();
+            PlacePrefab(prefabA); // Place Prefab A
         }
 
         if (OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch))
         {
-            HandleDeletion();
-            //UpdateTileVariants();
+            PlacePrefab(prefabB); // Place Prefab B
         }
+
+        if (OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.LTouch))
+        {
+            PlacePrefab(prefabC); // Place Prefab C
+        }
+
+        if (OVRInput.GetDown(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.LTouch))
+        {
+            HandleDeletion(); // Remove tile
+        }
+
         VisualizeRaycast();
         ShowPreview();
-        //UpdateTileVariants();
-    }
-
-    private void FixedUpdate()
-    {
-        UpdateTileVariants();
-    }
-
-    private void OnDisable()
-    {
-        if (raycastCylinder != null)
-        {
-            Destroy(raycastCylinder);
-        }
-        if (previewTile != null)
-        {
-            Destroy(previewTile);
-        }
     }
 
     private void VisualizeRaycast()
@@ -77,12 +70,14 @@ public class GridPlacer : MonoBehaviour
             raycastCylinder.transform.position = ray.origin + ray.direction * (hit.distance / 2);
             raycastCylinder.transform.localScale = new Vector3(0.01f, hit.distance / 2, 0.01f); // Adjust the length of the cylinder
             raycastCylinder.transform.rotation = Quaternion.LookRotation(ray.direction) * Quaternion.Euler(90, 0, 0); // Flip by 90 degrees
+            raycastCylinder.SetActive(true);
         }
         else
         {
             raycastCylinder.transform.position = ray.origin + ray.direction * (maxCylinderLength / 2);
             raycastCylinder.transform.localScale = new Vector3(0.01f, maxCylinderLength / 2, 0.01f); // Adjust the length of the cylinder
             raycastCylinder.transform.rotation = Quaternion.LookRotation(ray.direction) * Quaternion.Euler(90, 0, 0); // Flip by 90 degrees
+            raycastCylinder.SetActive(true);
         }
     }
 
@@ -91,15 +86,20 @@ public class GridPlacer : MonoBehaviour
         Ray ray = new Ray(leftController.transform.position, leftController.transform.forward);
         if (Physics.Raycast(ray, out RaycastHit hit, maxCylinderLength))
         {
-            if (hit.collider.CompareTag(gridTag))
+            if (hit.collider.gameObject == snapToObject)
             {
                 Vector3 hitPoint = hit.point;
-                // Snap the position to the grid by rounding to the nearest grid unit
-                Vector3 snappedPosition = new Vector3(Mathf.Round(hitPoint.x / gridSize) * gridSize, 0, Mathf.Round(hitPoint.z / gridSize) * gridSize);
 
+                // Snap to specific GameObject's grid and apply group rotation
+                Vector3 snappedPosition = SnapToGrid(hitPoint, snapToObject.transform.rotation, snapToObject.transform);
                 previewTile.transform.position = snappedPosition;
+
+                // Rotate the preview tile based on the snapToObject's rotation
+                previewTile.transform.rotation = snapToObject.transform.rotation;
+
                 previewTile.SetActive(true);
 
+                // Breathing animation
                 if (previewBreathing)
                 {
                     breathTimer += Time.deltaTime;
@@ -122,41 +122,48 @@ public class GridPlacer : MonoBehaviour
         }
     }
 
-    private void HandlePlacement()
+    private Vector3 SnapToGrid(Vector3 hitPoint, Quaternion rotation, Transform snapToObject)
     {
-            Ray ray = new Ray(leftController.transform.position, leftController.transform.forward);
-            if (Physics.Raycast(ray, out RaycastHit hit, maxCylinderLength))
-            {
-                if (hit.collider.CompareTag(gridTag))
-                {
-                    Vector3 hitPoint = hit.point;
-                    // Snap the position to the grid by rounding to the nearest grid unit
-                    Vector3 snappedPosition = new Vector3(Mathf.Round(hitPoint.x / gridSize) * gridSize, 0, Mathf.Round(hitPoint.z / gridSize) * gridSize);
+        // Snap the position to the grid by rounding to the nearest grid unit
+        Vector3 localPoint = Quaternion.Inverse(rotation) * hitPoint; // Transform into local space
+        localPoint = new Vector3(Mathf.Round(localPoint.x / gridSize) * gridSize, snapToObject.position.y, Mathf.Round(localPoint.z / gridSize) * gridSize);
+        return rotation * localPoint; // Transform back to world space
+    }
 
-                    if (IsPositionEmpty(snappedPosition))
-                    {
-                        GameObject newTile = Instantiate(gridPrefab, snappedPosition, Quaternion.identity);
-                        newTile.layer = prefabLayer; // Assign the layer to the new prefab
-                        AssignLayerRecursively(newTile, prefabLayer); // Assign the layer to all child objects
-                        placedTiles.Add(newTile);
-                    }
+    private void PlacePrefab(GameObject prefab)
+    {
+        Ray ray = new Ray(leftController.transform.position, leftController.transform.forward);
+        if (Physics.Raycast(ray, out RaycastHit hit, maxCylinderLength))
+        {
+            if (hit.collider.gameObject == snapToObject)
+            {
+                Vector3 hitPoint = hit.point;
+                Vector3 snappedPosition = SnapToGrid(hitPoint, snapToObject.transform.rotation, snapToObject.transform);
+
+                if (IsPositionEmpty(snappedPosition))
+                {
+                    GameObject newTile = Instantiate(prefab, snappedPosition, snapToObject.transform.rotation);
+                    newTile.layer = prefabLayer; // Assign the layer to the new prefab
+                    AssignLayerRecursively(newTile, prefabLayer); // Assign the layer to all child objects
+                    placedTiles.Add(newTile);
                 }
             }
+        }
     }
 
     private void HandleDeletion()
     {
-            Ray ray = new Ray(leftController.transform.position, leftController.transform.forward);
-            if (Physics.Raycast(ray, out RaycastHit hit, maxCylinderLength))
+        Ray ray = new Ray(leftController.transform.position, leftController.transform.forward);
+        if (Physics.Raycast(ray, out RaycastHit hit, maxCylinderLength))
+        {
+            GameObject hitObject = hit.collider.gameObject;
+            GameObject rootObject = GetRootWithLayer(hitObject, prefabLayer);
+            if (rootObject != null && placedTiles.Contains(rootObject))
             {
-                GameObject hitObject = hit.collider.gameObject;
-                GameObject rootObject = GetRootWithLayer(hitObject, prefabLayer);
-                if (rootObject != null && placedTiles.Contains(rootObject))
-                {
-                    placedTiles.Remove(rootObject);
-                    Destroy(rootObject);
-                }
+                placedTiles.Remove(rootObject);
+                Destroy(rootObject);
             }
+        }
     }
 
     private bool IsPositionEmpty(Vector3 position)
@@ -169,56 +176,6 @@ public class GridPlacer : MonoBehaviour
             }
         }
         return true;
-    }
-
-    private void UpdateTileVariants()
-    {
-        foreach (GameObject tile in placedTiles)
-        {
-            Vector3 position = tile.transform.position;
-            int neighbourCount = 0;
-            bool left = false, right = false, up = false, down = false;
-
-            foreach (GameObject otherTile in placedTiles)
-            {
-                if (otherTile == tile) continue;
-
-                Vector3 otherPosition = otherTile.transform.position;
-                if (otherPosition == position + Vector3.left * gridSize) { neighbourCount++; left = true; }
-                if (otherPosition == position + Vector3.right * gridSize) { neighbourCount++; right = true; }
-                if (otherPosition == position + Vector3.forward * gridSize) { neighbourCount++; up = true; }
-                if (otherPosition == position + Vector3.back * gridSize) { neighbourCount++; down = true; }
-            }
-
-            if (neighbourCount == 0 || neighbourCount == 1)
-            {
-                ChangePrefab(tile, prefabVariantA);
-            }
-            else if (neighbourCount == 2 && left && right)
-            {
-                ChangePrefab(tile, prefabVariantB);
-            }
-            else if (neighbourCount == 2 && up && down)
-            {
-                ChangePrefab(tile, prefabVariantC);
-            }
-            else
-            {
-                ChangePrefab(tile, prefabVariantA);
-            }
-        }
-    }
-
-    private void ChangePrefab(GameObject oldTile, GameObject newPrefab)
-    {
-        Vector3 position = oldTile.transform.position;
-        Quaternion rotation = oldTile.transform.rotation;
-        Destroy(oldTile);
-        GameObject newTile = Instantiate(newPrefab, position, rotation);
-        newTile.layer = prefabLayer; // Assign the layer to the new prefab
-        AssignLayerRecursively(newTile, prefabLayer); // Assign the layer to all child objects
-        placedTiles.Remove(oldTile);
-        placedTiles.Add(newTile);
     }
 
     private void AssignLayerRecursively(GameObject obj, int layer)
@@ -246,4 +203,17 @@ public class GridPlacer : MonoBehaviour
         }
         return null;
     }
+
+    private void OnDisable()
+    {
+        if (raycastCylinder != null)
+        {
+            raycastCylinder.SetActive(false);
+        }
+        if (previewTile != null)
+        {
+            previewTile.SetActive(false);
+        }
+    }
+
 }

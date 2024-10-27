@@ -6,7 +6,13 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Visio AR/Scenes/Lets Walk.unity
+    path: Assets/Visio AR/Scenes/FirstLanding.unity
+    guid: df32c0b9ba2c25e4e8f43aeab7d74837
+  - enabled: 1
+    path: Assets/Visio AR/Scenes/EducationEnglish.unity
+    guid: c16a58ee31cef6c4ea8832799bf3db46
+  - enabled: 1
+    path: Assets/Visio AR/Scenes/EducationDutch.unity
     guid: 99c9720ab356a0642a771bea13969a05
   m_configObjects:
     Unity.XR.Oculus.Settings: {fileID: 11400000, guid: 8b57a98470c7bfd44848cb7e70138787,

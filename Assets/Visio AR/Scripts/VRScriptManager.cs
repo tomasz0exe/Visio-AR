@@ -1,112 +1,160 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement; // Import SceneManager
 
 public class VRScriptManager : MonoBehaviour
 {
-    [Tooltip("List of scripts to be active during setup phase")]
-    public List<MonoBehaviour> setupScripts;
+    public enum Phase
+    {
+        Calibration,
+        Setup,
+        Play
+    }
 
-    [Tooltip("List of scripts to be active during running phase")]
-    public List<MonoBehaviour> runningScripts;
+    [Tooltip("List of GameObjects to be active during Calibration phase")]
+    public List<GameObject> calibrationObjects;
 
-    [Tooltip("Tag for objects to keep alive after transition")]
-    public string keepTag = "KeepAlive";
+    [Tooltip("List of GameObjects to be active during Setup phase")]
+    public List<GameObject> setupObjects;
 
-    [Tooltip("Parent transform for all setup-related objects")]
-    public Transform setupContainer;
+    [Tooltip("List of GameObjects to be active during Play phase")]
+    public List<GameObject> playObjects;
 
-    [Tooltip("List of additional GameObjects to destroy outside the setup container")]
-    public List<GameObject> additionalObjectsToDestroy;
+    [Tooltip("Name of the scene to load when left joystick is pressed during Calibration phase")]
+    public string calibrationSceneName; // Scene name as a string
 
-    private bool isSetupActive = true;
+    private Phase currentPhase = Phase.Calibration;
     private float pressDuration = 2.0f;
-    private float pressTime = 0.0f;
+    private float leftPressTime = 0.0f;
+    private float rightPressTime = 0.0f;
 
     void Start()
     {
-        // Ensure setup scripts are enabled and running scripts are disabled initially
-        SetScriptsActive(setupScripts, true);
-        SetScriptsActive(runningScripts, false);
+        // Start in Calibration phase
+        ActivatePhase(Phase.Calibration);
     }
 
     void Update()
     {
-        // Check if the left joystick is pressed for the required duration
-        if (OVRInput.Get(OVRInput.Button.PrimaryThumbstick))
+        HandleInput();
+    }
+
+    void HandleInput()
+    {
+        // Right joystick press for 2 seconds to move to the next phase
+        if (OVRInput.Get(OVRInput.Button.SecondaryThumbstick))
         {
-            pressTime += Time.deltaTime;
-            if (pressTime >= pressDuration)
+            rightPressTime += Time.deltaTime;
+            if (rightPressTime >= pressDuration)
             {
-                // Transition to running scripts
-                TransitionToRunningScripts();
+                ActivateNextPhase();
+                rightPressTime = 0.0f;
             }
         }
         else
         {
-            pressTime = 0.0f;
+            rightPressTime = 0.0f;
+        }
+
+        // Left joystick press for 2 seconds to move to the previous phase or load a scene if in Calibration phase
+        if (OVRInput.Get(OVRInput.Button.PrimaryThumbstick))
+        {
+            leftPressTime += Time.deltaTime;
+            if (leftPressTime >= pressDuration)
+            {
+                if (currentPhase == Phase.Calibration)
+                {
+                    LoadCalibrationScene();
+                }
+                else
+                {
+                    ActivatePreviousPhase();
+                }
+                leftPressTime = 0.0f;
+            }
+        }
+        else
+        {
+            leftPressTime = 0.0f;
         }
     }
 
-    void TransitionToRunningScripts()
+    void LoadCalibrationScene()
     {
-        if (isSetupActive)
+        if (!string.IsNullOrEmpty(calibrationSceneName))
         {
-            // Disable setup scripts and destroy their objects unless tagged to keep
-            foreach (var script in setupScripts)
-            {
-                if (script != null)
-                {
-                    if (!script.gameObject.CompareTag(keepTag))
-                    {
-                        Destroy(script.gameObject);
-                    }
-                    else
-                    {
-                        script.enabled = false;
-                    }
-                }
-            }
-
-            // Destroy all objects in the setup container unless they are tagged to keep
-            List<GameObject> objectsToDestroy = new List<GameObject>();
-            foreach (Transform child in setupContainer)
-            {
-                if (!child.CompareTag(keepTag))
-                {
-                    objectsToDestroy.Add(child.gameObject);
-                }
-            }
-
-            foreach (var obj in objectsToDestroy)
-            {
-                Destroy(obj);
-            }
-
-            // Destroy additional objects outside the setup container unless tagged to keep
-            foreach (var obj in additionalObjectsToDestroy)
-            {
-                if (obj != null && !obj.CompareTag(keepTag))
-                {
-                    Destroy(obj);
-                }
-            }
-
-            // Enable running scripts
-            SetScriptsActive(runningScripts, true);
-
-            // Mark setup as inactive and disable this script
-            isSetupActive = false;
-            this.enabled = false;
+            // Load the scene by name
+            SceneManager.LoadScene(calibrationSceneName);
+        }
+        else
+        {
+            Debug.LogWarning("Calibration scene name is not set in the inspector!");
         }
     }
 
-    void SetScriptsActive(List<MonoBehaviour> scripts, bool active)
+    void ActivateNextPhase()
     {
-        foreach (var script in scripts)
+        switch (currentPhase)
         {
-            if (script != null)
+            case Phase.Calibration:
+                ActivatePhase(Phase.Setup);
+                break;
+            case Phase.Setup:
+                ActivatePhase(Phase.Play);
+                break;
+            case Phase.Play:
+                // Do nothing, already at last phase
+                break;
+        }
+    }
+
+    void ActivatePreviousPhase()
+    {
+        switch (currentPhase)
+        {
+            case Phase.Play:
+                ActivatePhase(Phase.Setup);
+                break;
+            case Phase.Setup:
+                ActivatePhase(Phase.Calibration);
+                break;
+            case Phase.Calibration:
+                // Do nothing, already at first phase
+                break;
+        }
+    }
+
+    void ActivatePhase(Phase newPhase)
+    {
+        // Deactivate all objects for all phases
+        SetObjectsActive(calibrationObjects, false);
+        SetObjectsActive(setupObjects, false);
+        SetObjectsActive(playObjects, false);
+
+        // Activate objects for the new phase
+        switch (newPhase)
+        {
+            case Phase.Calibration:
+                SetObjectsActive(calibrationObjects, true);
+                break;
+            case Phase.Setup:
+                SetObjectsActive(setupObjects, true);
+                break;
+            case Phase.Play:
+                SetObjectsActive(playObjects, true);
+                break;
+        }
+
+        currentPhase = newPhase;
+    }
+
+    void SetObjectsActive(List<GameObject> objects, bool active)
+    {
+        foreach (var obj in objects)
+        {
+            if (obj != null)
             {
-                script.enabled = active;
+                obj.SetActive(active);
             }
         }
     }
