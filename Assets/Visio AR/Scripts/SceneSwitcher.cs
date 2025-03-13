@@ -9,6 +9,9 @@ public class SceneSwitcher : MonoBehaviour
     [Tooltip("Scene name to switch to for English.")]
     public string englishSceneName; // Scene name as a string
 
+    [Tooltip("Scene name to switch to for German.")]
+    public string germanSceneName; // Scene name as a string
+
     private void Update()
     {
         HandleInput();
@@ -26,6 +29,12 @@ public class SceneSwitcher : MonoBehaviour
         if (OVRInput.GetDown(OVRInput.Button.One)) // 'A' button
         {
             SwitchToScene(englishSceneName);
+        }
+
+        // Detect B button press to switch to German scene
+        if (OVRInput.GetDown(OVRInput.Button.Two)) // 'B' button
+        {
+            SwitchToScene(germanSceneName);
         }
     }
 
